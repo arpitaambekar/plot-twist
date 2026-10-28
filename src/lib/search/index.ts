@@ -42,13 +42,17 @@ export async function webSearch(query: string, opts: SearchOptions): Promise<Sea
   const results = env.tavilyKey ? await tavily(query, opts) : await brave(query, opts);
   await recordUsage(opts.userId, "search", 1, { query, provider: env.tavilyKey ? "tavily" : "brave" });
   const blocked = new Set(settings.blocked_domains.map((d) => d.replace(/^www\./, "")));
+  const preferred = settings.preferred_domains.map((d) => d.replace(/^www\./, ""));
+  const isPreferred = (url: string) => preferred.some((d) => hostOf(url) === d || hostOf(url).endsWith("." + d));
   const seen = new Set<string>();
-  return results.filter((r) => {
+  const kept = results.filter((r) => {
     const key = r.url.replace(/[?#].*$/, "").replace(/\/$/, "");
     if (seen.has(key) || blocked.has(hostOf(r.url))) return false;
     seen.add(key);
     return true;
   });
+  // Admin-preferred sources are ranked first (stable order otherwise).
+  return [...kept.filter((r) => isPreferred(r.url)), ...kept.filter((r) => !isPreferred(r.url))];
 }
 
 async function tavily(query: string, opts: SearchOptions): Promise<SearchResult[]> {

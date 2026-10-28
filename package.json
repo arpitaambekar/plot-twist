@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types tests/unit/*.test.ts",
+    "test": "node --import ./tests/unit/register.mjs --test --experimental-strip-types tests/unit/*.test.ts",
     "test:e2e": "node tests/e2e/run.mjs"
   },
   "engines": {
