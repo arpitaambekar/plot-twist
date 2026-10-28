@@ -412,7 +412,7 @@ create table if not exists watchlist (
 
 create table if not exists app_settings (
   id text primary key,
-  news_refresh_hours int not null default 8,
+  news_refresh_hours int not null default 24,
   news_lookback_days int not null default 30,
   default_research_depth text not null default 'comprehensive',
   report_cache_days int not null default 14,

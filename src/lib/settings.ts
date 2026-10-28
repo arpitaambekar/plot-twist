@@ -4,7 +4,7 @@ import type { AppSettings } from "@/lib/types";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   id: "global",
-  news_refresh_hours: 8,
+  news_refresh_hours: 24,
   news_lookback_days: 30,
   default_research_depth: "comprehensive",
   report_cache_days: 14,

@@ -103,7 +103,7 @@ Long-running work (destination reports, contact discovery, news refresh, campaig
 - Each job's status (`queued → finding_sources → extracting_facts → verifying → generating_report → completed / failed`) and log are persisted in `research_jobs`. The UI polls them, with no fake percentages.
 - Jobs start after the HTTP response using Next.js `after()`.
 - `/api/cron/jobs` (every 15 minutes) resumes queued or stalled jobs, up to 3 attempts. Failed jobs can also be retried from `/admin`.
-- `/api/cron/news` refreshes news every `news_refresh_hours` (default 8, configurable in `/admin`).
+- `/api/cron/news` refreshes news every `news_refresh_hours` (default 24 to stay within the free Tavily tier; configurable in `/admin`).
 
 **Cost controls:**
 - **Report caching:** reports are reused within `report_cache_days`, and re-running the same destination and options offers the cached report.
