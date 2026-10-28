@@ -74,7 +74,7 @@ All keys are listed in [`.env.example`](.env.example). Secrets are only read ser
 |---|---|---|
 | Database + auth | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Switches the store to Postgres and sign-in to Google Workspace |
 | Access control | `ALLOWED_EMAIL_DOMAINS`, `ADMIN_EMAILS`, `SESSION_SECRET` | Domain allow-list; first user / listed emails become admin |
-| AI | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_CREATIVE_MODEL` | JSON output validated with Zod, one repair retry. Admins can override the model in `/admin` |
+| AI | `OPENAI_API_KEY` **or** `OPENROUTER_API_KEY`, `OPENAI_MODEL`, `OPENAI_CREATIVE_MODEL` | OpenRouter keys (`sk-or-…`) are detected automatically; model names then use the `openai/…` prefix. JSON output validated with Zod, one repair retry. Admins can override the model in `/admin` |
 | Search | `TAVILY_API_KEY` (recommended) or `BRAVE_SEARCH_API_KEY` | Needed for live research, news search, contacts and library re-verification |
 | Photos | none (Wikimedia Commons), optional `UNSPLASH_ACCESS_KEY` | Only CC0 / CC BY / CC BY-SA / public-domain photos, with attribution stored |
 | Scheduler | `CRON_SECRET` | Bearer token for `/api/cron/*` |

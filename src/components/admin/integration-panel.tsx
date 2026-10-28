@@ -28,7 +28,7 @@ export function integrationRows(s: IntegrationStatus): Row[] {
       name: "AI (OpenAI)",
       state: s.ai && !s.demoFixtures ? "ok" : "missing",
       detail: s.ai && !s.demoFixtures ? "Configured on the server" : s.demoFixtures ? "Demo fixtures only, no real AI" : "Not configured. Research, campaigns and outreach drafts are disabled.",
-      setup: "Set OPENAI_API_KEY. Optional: OPENAI_MODEL (analysis) and OPENAI_CREATIVE_MODEL (campaigns).",
+      setup: "Set OPENAI_API_KEY (OpenAI) or OPENROUTER_API_KEY (OpenRouter). Optional: OPENAI_MODEL (analysis) and OPENAI_CREATIVE_MODEL (campaigns).",
     },
     {
       name: "Web search",

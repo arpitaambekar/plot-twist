@@ -34,25 +34,35 @@ async function callOpenAI(model: string, messages: { role: string; content: stri
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      const openrouter = env.aiProvider === "openrouter";
+      const res = await fetch(`${env.aiBaseUrl}/chat/completions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.openaiKey}` },
-        body: JSON.stringify({ model, messages, response_format: { type: "json_object" }, max_completion_tokens: maxTokens }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.openaiKey}`,
+          ...(openrouter ? { "HTTP-Referer": env.appUrl, "X-Title": "plot twist." } : {}),
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          response_format: { type: "json_object" },
+          ...(openrouter ? { max_tokens: maxTokens } : { max_completion_tokens: maxTokens }),
+        }),
         signal: AbortSignal.timeout(240_000),
       });
       if (res.status === 429 || res.status >= 500) {
-        lastErr = new AiError(`OpenAI returned ${res.status}`);
+        lastErr = new AiError(`AI provider returned ${res.status}`);
         await new Promise((r) => setTimeout(r, 1500 * 2 ** attempt));
         continue;
       }
       const body = await res.json();
-      if (!res.ok) throw new AiError(body?.error?.message ?? `OpenAI returned ${res.status}`);
+      if (!res.ok) throw new AiError(body?.error?.message ?? `AI provider returned ${res.status}`);
       const choice = body.choices?.[0];
       if (choice?.finish_reason === "length") throw new AiError("The AI response was cut off (output too long). Try quick depth or fewer items.");
       return { text: String(choice?.message?.content ?? ""), tokens: Number(body.usage?.total_tokens ?? 0) };
     } catch (e) {
       lastErr = e;
-      if (e instanceof AiError && !String(e.message).startsWith("OpenAI returned 5") && !String(e.message).includes("429")) throw e;
+      if (e instanceof AiError && !String(e.message).startsWith("AI provider returned 5") && !String(e.message).includes("429")) throw e;
     }
   }
   throw lastErr instanceof Error ? lastErr : new AiError("AI request failed");
@@ -79,7 +89,7 @@ export async function generateStructured<T>(req: StructuredRequest<T>): Promise<
     await recordUsage(req.userId, "ai", 1, { task: req.task, demo: true });
     return req.schema.parse(req.fixture());
   }
-  if (!env.openaiKey) throw new NotConfiguredError("ai", "AI generation needs OPENAI_API_KEY. Add it in your environment, then reload.");
+  if (!env.openaiKey) throw new NotConfiguredError("ai", "AI generation needs OPENAI_API_KEY or OPENROUTER_API_KEY. Add it in your environment, then reload.");
   await checkDailyLimit(req.userId, "ai");
 
   const settings = await getSettings();

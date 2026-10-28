@@ -24,14 +24,22 @@ export const env = {
   get supabaseConfigured() {
     return Boolean(this.supabaseUrl && this.supabaseAnonKey && this.supabaseServiceKey);
   },
+  /** Effective AI key: OpenRouter (OPENROUTER_API_KEY, or an sk-or- key in OPENAI_API_KEY) or OpenAI. */
   get openaiKey() {
-    return v("OPENAI_API_KEY");
+    return v("OPENROUTER_API_KEY") ?? v("OPENAI_API_KEY");
+  },
+  get aiProvider(): "openrouter" | "openai" {
+    return v("OPENROUTER_API_KEY") || v("OPENAI_API_KEY")?.startsWith("sk-or-") ? "openrouter" : "openai";
+  },
+  /** OpenAI-compatible chat completions endpoint. */
+  get aiBaseUrl() {
+    return (v("AI_BASE_URL") ?? (this.aiProvider === "openrouter" ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1")).replace(/\/$/, "");
   },
   get openaiModel() {
-    return v("OPENAI_MODEL") ?? "gpt-5-mini";
+    return v("OPENAI_MODEL") ?? (this.aiProvider === "openrouter" ? "openai/gpt-5-mini" : "gpt-5-mini");
   },
   get openaiCreativeModel() {
-    return v("OPENAI_CREATIVE_MODEL") ?? v("OPENAI_MODEL") ?? "gpt-5";
+    return v("OPENAI_CREATIVE_MODEL") ?? v("OPENAI_MODEL") ?? (this.aiProvider === "openrouter" ? "openai/gpt-5" : "gpt-5");
   },
   get tavilyKey() {
     return v("TAVILY_API_KEY");
@@ -98,8 +106,10 @@ export function integrationStatus(): IntegrationStatus {
 }
 
 export class NotConfiguredError extends Error {
-  constructor(public integration: "ai" | "search" | "database", message?: string) {
+  integration: "ai" | "search" | "database";
+  constructor(integration: "ai" | "search" | "database", message?: string) {
     super(message ?? `${integration} integration is not configured`);
     this.name = "NotConfiguredError";
+    this.integration = integration;
   }
 }
