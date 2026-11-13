@@ -13,7 +13,12 @@ import { api } from "@/lib/client";
 import { fmtDate, cn, daysSince } from "@/lib/utils";
 
 const fmtNum = (v: number) => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(v);
-const fmtCompact = (v: number) => new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 }).format(v);
+// Hand-rolled so server and browser render identical text (ICU compact notation differs between Node and browsers).
+const fmtCompact = (v: number) => {
+  const units: [number, string][] = [[1e9, "B"], [1e6, "M"], [1e3, "k"]];
+  for (const [n, u] of units) if (Math.abs(v) >= n) return `${Number((v / n).toFixed(1))}${u}`;
+  return String(v);
+};
 
 /** Comparable = same metric, same unit, same reporting period. Nothing else is ever charted together. */
 function comparableGroups(stats: OutboundStat[]) {

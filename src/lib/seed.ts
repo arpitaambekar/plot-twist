@@ -7,6 +7,8 @@ import stats from "@/data/outbound-stats.json";
 
 /** Seed data was gathered from web-search evidence on this date; source pages still need opening and re-checking. */
 export const SEED_RESEARCHED_AT = "2026-10-28T00:00:00.000Z";
+/** Outbound statistics were researched separately, from search-result evidence. */
+export const STATS_RESEARCHED_AT = "2026-11-13T00:00:00.000Z";
 
 export function slugify(s: string) {
   return s
@@ -93,7 +95,7 @@ async function runSeed() {
     const rows: OutboundStat[] = (stats as Omit<OutboundStat, "id" | "verified_at" | "status" | "created_by" | "created_at">[]).map((s) => ({
       ...s,
       id: newId(),
-      verified_at: SEED_RESEARCHED_AT,
+      verified_at: STATS_RESEARCHED_AT,
       status: "Needs Verification",
       created_by: "seed",
       created_at: nowIso(),
