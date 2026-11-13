@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
-import { findPhoto } from "@/lib/images";
+import { findPhoto, photoQueryFor } from "@/lib/images";
 import { SEED_RESEARCHED_AT } from "@/lib/seed";
 import type { ImageRef } from "@/lib/types";
 import { PageHeader } from "@/components/ui/primitives";
@@ -23,7 +23,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
   await Promise.all(
     uniq.map(async (name) => {
       const d = destinations.find((x) => x.name.toLowerCase() === name.toLowerCase());
-      const img = await Promise.race([findPhoto(d?.photo_query ?? `${name} landscape`, { file: d?.photo_file, alt: `${name} (destination photo)` }), new Promise<null>((r) => setTimeout(() => r(null), 6000))]);
+      const img = await Promise.race([findPhoto(photoQueryFor(name, d?.photo_query), { file: d?.photo_file, alt: `${name} (destination photo)` }), new Promise<null>((r) => setTimeout(() => r(null), 6000))]);
       photos.set(name, img ? { ...img, is_destination_photo: true } : null);
     }),
   );

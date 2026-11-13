@@ -47,9 +47,70 @@ async function commonsQuery(params: Record<string, string>): Promise<CommonsPage
   return Object.values(body.query?.pages ?? {}).sort((a, b) => ((a as { index?: number }).index ?? 0) - ((b as { index?: number }).index ?? 0));
 }
 
+/** File titles that are never destination photography (satellite views, maps, flags, diagrams…). */
+export const NOT_A_PHOTO = /satellite|sentinel-?\d|\bsentinel\b|landsat|copernicus|\bnasa\b|from space|\biss\d*\b|astronaut|earth observation|orthophoto|\bmaps?\b|locator|\bflags?\b|coat of arms|emblem|\blogo|seal of|diagram|\bcharts?\b|\bgraphs?\b|\bstamps?\b|banknote|\bcoins?\b|\bposter|screenshot|\bplan\b|topographic|relief map|terrain|elevation/i;
+
+/** Landmark-led searches for destinations outside the directory; "<country> landscape" often returns satellite imagery. */
+const PHOTO_HINTS: Record<string, string> = {
+  australia: "Sydney Opera House harbour",
+  "faroe islands": "Gasadalur waterfall Faroe Islands",
+  sweden: "Gamla stan Stockholm",
+  finland: "Helsinki Cathedral Senate Square",
+  iceland: "Skogafoss waterfall Iceland",
+  denmark: "Nyhavn Copenhagen",
+  norway: "Geirangerfjord Norway",
+  "united arab emirates": "Dubai skyline Burj Khalifa",
+  uae: "Dubai skyline Burj Khalifa",
+  dubai: "Dubai skyline Burj Khalifa",
+  "abu dhabi": "Sheikh Zayed Grand Mosque Abu Dhabi",
+  thailand: "Wat Arun Bangkok",
+  singapore: "Marina Bay Singapore skyline",
+  indonesia: "Tegallalang rice terraces Bali",
+  bali: "Tegallalang rice terraces Bali",
+  malaysia: "Petronas Towers Kuala Lumpur",
+  "sri lanka": "Nine Arches Bridge Ella",
+  maldives: "Maldives island resort lagoon",
+  nepal: "Boudhanath Stupa Kathmandu",
+  bhutan: "Paro Taktsang",
+  france: "Eiffel Tower Paris",
+  italy: "Manarola Cinque Terre",
+  greece: "Oia Santorini",
+  turkey: "Cappadocia balloons",
+  egypt: "Giza pyramids",
+  kenya: "Maasai Mara wildlife",
+  mauritius: "Le Morne Brabant Mauritius",
+  georgia: "Gergeti Trinity Church",
+  kazakhstan: "Almaty Medeu mountains",
+  "hong kong": "Victoria Harbour Hong Kong skyline",
+  "united kingdom": "Tower Bridge London",
+  "united states": "Grand Canyon",
+  canada: "Moraine Lake Banff",
+  germany: "Neuschwanstein Castle",
+  netherlands: "Amsterdam canal houses",
+  portugal: "Lisbon Alfama tram",
+  jordan: "Petra Treasury",
+  "saudi arabia": "AlUla Hegra",
+  qatar: "Doha skyline",
+  seychelles: "Anse Source d'Argent",
+  fiji: "Fiji island beach",
+  cambodia: "Angkor Wat",
+  croatia: "Dubrovnik old town",
+  "czech republic": "Prague Old Town Square",
+  hungary: "Hungarian Parliament Budapest",
+  mexico: "Chichen Itza",
+  peru: "Machu Picchu",
+};
+
+/** Best Commons search for a destination: the directory's curated query, then a landmark hint, then the name. */
+export function photoQueryFor(name: string, curated?: string | null): string {
+  if (curated) return curated;
+  return PHOTO_HINTS[name.trim().toLowerCase()] ?? `${name} city`;
+}
+
 function toRef(p: CommonsPage, alt: string): ImageRef | null {
   const ii = p.imageinfo?.[0];
   if (!ii) return null;
+  if (NOT_A_PHOTO.test(p.title)) return null;
   if (ii.mime && !/jpeg|png|webp/.test(ii.mime)) return null;
   if (ii.width < 1000 || ii.width < ii.height) return null; // landscape, reasonably large only
   const meta = ii.extmetadata ?? {};

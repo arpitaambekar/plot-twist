@@ -8,7 +8,7 @@ import { CREATIVE_SYSTEM } from "./generate";
 import { briefText, contextForSet, resolveRefs } from "./context";
 import { EDITABLE_FIELDS, createIdea, toContent } from "./service";
 import { demoCombine, demoCompare, demoRefine } from "@/lib/fixtures/campaigns";
-import { findPhoto } from "@/lib/images";
+import { findPhoto, photoQueryFor } from "@/lib/images";
 
 export const REFINE_ACTIONS = {
   bolder: { label: "Make It Bolder", instruction: "Increase creative originality and surprise while keeping it feasible and safe.", fields: ["big_idea", "line", "how_it_works", "hero_activation", "creator_opportunities"] },
@@ -140,7 +140,7 @@ export async function combineIdeas(a: CampaignIdea, b: CampaignIdea, set: Campai
   const m = out.merge;
   const notes = `Retained: ${m.retained}\nRemoved: ${m.removed}\nHow merged: ${m.how_merged}\nWhy stronger: ${m.why_stronger}\nFeasibility: ${m.feasibility}`;
   const claimIds = [...new Set([...resolveRefs(out.idea.research_refs, ctx.labels), ...a.content.research_claim_ids, ...b.content.research_claim_ids])];
-  const image = a.image ?? b.image ?? (await findPhoto(a.destination).catch(() => null));
+  const image = a.image ?? b.image ?? (await findPhoto(photoQueryFor(a.destination), { alt: a.destination }).catch(() => null));
   return createIdea({
     set_id: a.set_id,
     destination: a.destination,

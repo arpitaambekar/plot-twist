@@ -8,7 +8,7 @@ import { webSearch, type SearchResult } from "@/lib/search";
 import { storeSources, verifyDraft, computeHealth, labelSources, type DraftClaim } from "@/lib/evidence";
 import { generateStructured } from "@/lib/ai/openai";
 import { asUntrustedBlock } from "@/lib/security/content";
-import { findPhoto } from "@/lib/images";
+import { findPhoto, photoQueryFor } from "@/lib/images";
 import { getSettings } from "@/lib/settings";
 import { setJobStage } from "@/lib/jobs";
 import { fmtDate } from "@/lib/utils";
@@ -316,7 +316,7 @@ async function research(job: ResearchJob, input: ResearchJobInput, report: Repor
 
   // Photography: hero, places, gallery (licensed only, never an unrelated image).
   const withTimeout = <T,>(p: Promise<T>, ms = 12000) => Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
-  const hero = await withTimeout(findPhoto(destination?.photo_query ?? `${input.destination} landscape`, { file: destination?.photo_file, alt: input.destination }));
+  const hero = await withTimeout(findPhoto(photoQueryFor(input.destination, destination?.photo_query), { file: destination?.photo_file, alt: input.destination }));
   snapshot.hero_image = (hero as ImageRef | null) ?? null;
   await pool([...beyond, ...top], 4, async (p) => {
     p.image = ((await withTimeout(findPhoto(`${p.name} ${input.destination}`, { alt: `${p.name}, ${p.location || input.destination}` }))) as ImageRef | null) ?? null;

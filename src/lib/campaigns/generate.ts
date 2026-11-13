@@ -1,7 +1,7 @@
 import "server-only";
 import { db, nowIso } from "@/lib/db";
 import { generateStructured } from "@/lib/ai/openai";
-import { findPhoto } from "@/lib/images";
+import { findPhoto, photoQueryFor } from "@/lib/images";
 import { setJobStage } from "@/lib/jobs";
 import { env } from "@/lib/env";
 import type { CampaignIdea, CampaignSet, ResearchJob } from "@/lib/types";
@@ -109,7 +109,7 @@ export async function generateExtras(ctx: ResearchContext, briefTxt: string, ide
 
 async function photoFor(subject: string, destination: string) {
   const q = subject && !subject.includes("[DEMO]") ? `${subject} ${destination}` : destination;
-  return (await findPhoto(q, { alt: subject || destination })) ?? (await findPhoto(destination, { alt: destination }));
+  return (await findPhoto(q, { alt: subject || destination })) ?? (await findPhoto(photoQueryFor(destination), { alt: destination }));
 }
 
 /** Job handler: generates the ten concepts and the four extra sections for a campaign set. */

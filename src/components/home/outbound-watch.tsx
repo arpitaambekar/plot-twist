@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Card, EmptyState, Input, Label, Select, Textarea, SectionTitle, Notice } from "@/components/ui/primitives";
 import { ClaimStatusBadge } from "@/components/sources/status-badge";
+import { VerifyAllButton } from "@/components/shared/verify-all";
 import { useSession } from "@/components/shell/user-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/client";
@@ -46,9 +47,12 @@ export function OutboundWatch({ stats }: { stats: OutboundStat[] }) {
         title="The numbers behind the shift"
         action={
           can("editor") && (
-            <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4" /> Add a statistic
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <VerifyAllButton endpoint="/api/stats/verify-all" pending={stats.filter((x) => x.status !== "Verified").length} creditsEach={4} what="statistics" />
+              <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+                <Plus className="h-4 w-4" /> Add a statistic
+              </Button>
+            </div>
           )
         }
       />
@@ -181,7 +185,7 @@ function StatCard({ s }: { s: OutboundStat }) {
         <p className={cn("mt-1", stale && "text-peach-ink")}>
           Last verified {fmtDate(s.verified_at)}
           {stale ? " · may be out of date" : ""}
-          {s.created_by === "seed" ? " · seed data from search snippets, open the source to confirm" : ""}
+          {s.created_by === "seed" && s.status === "Needs Verification" ? " · from search snippets: use Check all sources, or open the source to confirm" : ""}
         </p>
         {can("editor") && (
           <div className="mt-2 flex gap-2">

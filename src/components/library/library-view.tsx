@@ -10,6 +10,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Photo } from "@/components/media/photo";
 import { SaveButton } from "@/components/shared/save-button";
 import { ClaimStatusBadge, KindLabel } from "@/components/sources/status-badge";
+import { VerifyAllButton } from "@/components/shared/verify-all";
 import { useSession } from "@/components/shell/user-context";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/client";
@@ -111,9 +112,12 @@ export function LibraryView({ items: initial, savedIds, initialRef, seedDate }: 
             </Select>
           </div>
           {can("editor") && (
-            <Button variant="secondary" onClick={() => setAdding(true)}>
-              <Plus className="h-4 w-4" /> Add reference
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <VerifyAllButton endpoint="/api/library/verify-all" pending={items.filter((x) => x.verification !== "Verified").length} creditsEach={6} what="reference campaigns" size="md" />
+              <Button variant="secondary" onClick={() => setAdding(true)}>
+                <Plus className="h-4 w-4" /> Add reference
+              </Button>
+            </div>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Campaign type">

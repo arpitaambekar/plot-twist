@@ -168,18 +168,31 @@ export async function generateSignals(userId: string): Promise<OpportunitySignal
   const news = (await store.list("news_articles", { orderBy: { column: "published_at" }, limit: 400 }))
     .filter((n) => n.india_relevance !== "Low" && n.category !== "Industry" && (!n.published_at || new Date(n.published_at).getTime() >= since))
     .filter((n) => (env.demoFixtures ? true : !n.is_demo))
+    // Signals are about international destinations; India-only stories never qualify.
+    .filter((n) => n.destinations.some((d) => !/^india$/i.test(d)))
     .slice(0, 25);
-  if (!news.length) return [];
+  const clearOld = async () => {
+    for (const old of await store.list("opportunity_signals", { limit: 500 })) await store.remove("opportunity_signals", old.id);
+  };
+  if (!news.length) {
+    await clearOld();
+    return [];
+  }
   const out = await generateStructured({
     task: "news.signals",
     schema: SignalSchema,
     userId,
     system: [
-      "From the news items provided, identify up to 6 partnership or marketing opportunities for Scapia's tourism-partnerships team (an Indian travel platform).",
+      "You advise Scapia's marketing and tourism-partnerships team. Scapia is an Indian travel platform; this team partners with INTERNATIONAL tourism boards, and with airlines or travel brands promoting international destinations, to get Indians travelling abroad (co-marketing campaigns, in-app destination features, creator content, launch promotions).",
+      "From the news items provided, identify up to 6 partnership opportunities with a specific international destination or its tourism board. Return fewer, or none, rather than weak ones.",
+      "Only count: a tourism board investing in or campaigning to India; India representation appointments or roadshows; a new or expanded route from India to an international destination; visa or entry easing for Indian passport holders; a major international event or festival that could drive Indian travel; tenders, co-marketing calls or partnership announcements.",
+      "Ignore: Indian domestic aviation, airports, infrastructure or operations; domestic Indian tourism; airline or platform product changes; anything without an international destination.",
+      "destination: the international country or region (never India).",
+      "next_action: ONE concrete step for the partnerships team in the next two weeks, at most two sentences, naming the board, destination or event. Choose from: research the destination in plot twist.; identify and verify the board's India representative; draft a co-marketing pitch around the news; time a campaign to the route launch, visa change or event; watch for a campaign brief or tender. Never suggest product, UX, inventory, operations or customer-service work.",
       "Each signal must cite the ids of the news items it is based on (evidence_news_ids). Only use ids provided.",
       "confidence = 'Confirmed activity' when the item itself reports that something happened (a campaign launched, a representative appointed, a route announced). Use 'Speculative opportunity' when the opportunity is your inference.",
-      "what_happened must restate only what the evidence says. why_it_matters and next_action are interpretation. Never claim Scapia has a relationship with any board.",
-      "time_sensitivity: 'Act now' for imminent windows or new appointments, 'This quarter' for upcoming campaigns/events, 'Watch' otherwise.",
+      "what_happened must restate only what the evidence says. why_it_matters is interpretation, framed for Indian outbound travellers and a tourism-board partnership. Never claim Scapia has a relationship with any board.",
+      "time_sensitivity: 'Act now' for imminent windows or new appointments, 'This quarter' for upcoming campaigns, routes or events, 'Watch' otherwise.",
     ].join("\n"),
     user: news
       .map((n) => `id: ${n.id}\ndestination(s): ${n.destinations.join(", ") || "unknown"}\ncategory: ${n.category}\npublished: ${n.published_at ?? "unknown"}\n${asUntrustedBlock(n.id, `${n.title}\n${n.summary}`)}`)
@@ -200,7 +213,7 @@ export async function generateSignals(userId: string): Promise<OpportunitySignal
   const signals: OpportunitySignal[] = out.signals
     .map((s) => {
       const ids = s.evidence_news_ids.filter((id) => byId.has(id));
-      if (!ids.length) return null;
+      if (!ids.length || /^\s*india\s*$/i.test(s.destination)) return null;
       return {
         id: newId("sig_"),
         destination: sanitizeExternalText(s.destination, 80),
@@ -217,7 +230,7 @@ export async function generateSignals(userId: string): Promise<OpportunitySignal
     })
     .filter(Boolean) as OpportunitySignal[];
   // Replace the previous generation; signals are a derived view of current news.
-  for (const old of await store.list("opportunity_signals", { limit: 500 })) await store.remove("opportunity_signals", old.id);
+  await clearOld();
   await store.insertMany("opportunity_signals", signals);
   return signals;
 }

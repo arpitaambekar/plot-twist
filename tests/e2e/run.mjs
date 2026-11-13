@@ -107,7 +107,9 @@ await test("2. Travel news: refresh, open story, source, filter, save, create op
   await page.waitForSelector("text=" + story.title.slice(0, 30));
   assert(await page.locator(`a[href="${story.url}"]`).first().isVisible(), "original source link");
   await page.screenshot({ path: `${OUT}/02-home-story.png` });
-  const saved = await api("POST", "/api/saved", { item_type: "news", item_id: story.id, label: story.title });
+  // Save is a toggle; on a re-run against the same data the story may already be saved.
+  let saved = await api("POST", "/api/saved", { item_type: "news", item_id: story.id, label: story.title });
+  if (!saved.saved) saved = await api("POST", "/api/saved", { item_type: "news", item_id: story.id, label: story.title });
   assert(saved.saved, "save story");
   const filtered = await api("GET", `/api/news?days=7&category=${encodeURIComponent(story.category)}`);
   assert(filtered.items.every((n) => n.category === story.category), "category filter");
