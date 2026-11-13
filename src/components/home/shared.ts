@@ -34,7 +34,8 @@ export interface NewsFilters {
   range: DateRange;
   from: string;
   to: string;
-  relevance: "" | "High" | "Medium" | "Low";
+  /** "MediumHigh" (default) hides Low-relevance stories; "" shows everything. */
+  relevance: "" | "MediumHigh" | "High" | "Medium" | "Low";
   sourceType: string;
   savedOnly: boolean;
   q: string;
@@ -48,7 +49,7 @@ export const DEFAULT_FILTERS: NewsFilters = {
   range: "30",
   from: "",
   to: "",
-  relevance: "",
+  relevance: "MediumHigh",
   sourceType: "",
   savedOnly: false,
   q: "",
@@ -74,7 +75,7 @@ export function applyFilters(news: NewsArticle[], f: NewsFilters, saved: Set<str
     if (f.destination && !n.destinations.includes(f.destination)) return false;
     if (f.continent && n.continent !== f.continent) return false;
     if (f.board && n.tourism_board !== f.board) return false;
-    if (f.relevance && n.india_relevance !== f.relevance) return false;
+    if (f.relevance === "MediumHigh" ? n.india_relevance === "Low" : f.relevance && n.india_relevance !== f.relevance) return false;
     if (f.sourceType && n.source_type !== f.sourceType) return false;
     if (f.savedOnly && !saved.has(n.id)) return false;
     if (q && !`${n.title} ${n.summary} ${n.source_name}`.toLowerCase().includes(q)) return false;

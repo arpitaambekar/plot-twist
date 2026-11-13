@@ -22,10 +22,11 @@ export function WeeklyDigest({
   onOpen: (id: string) => void;
 }) {
   const weekAgo = Date.now() - 7 * 86400000;
-  const week = news.filter((n) => new Date(n.published_at ?? n.retrieved_at).getTime() >= weekAgo);
+  // The digest follows the Home default: low India-relevance stories are left out.
+  const week = news.filter((n) => n.india_relevance !== "Low" && new Date(n.published_at ?? n.retrieved_at).getTime() >= weekAgo);
   const top = [...week].sort((a, b) => featuredScore(b) - featuredScore(a)).slice(0, 3);
   const campaigns = week.filter((n) => n.category === "Tourism-board campaign" || n.category === "Board business").slice(0, 3);
-  const events = news.filter((n) => n.category === "Events & festivals").slice(0, 3);
+  const events = news.filter((n) => n.category === "Events & festivals" && n.india_relevance !== "Low").slice(0, 3);
   const recentStats = [...stats].sort((a, b) => b.verified_at.localeCompare(a.verified_at)).slice(0, 2);
 
   const watchDest = new Set([...watchlist.filter((w) => w.kind === "destination").map((w) => w.value), ...savedDestinations]);

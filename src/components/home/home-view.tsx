@@ -113,7 +113,8 @@ export function HomeView(props: {
   const newsDestinations = useMemo(() => [...new Set([...destinations.map((d) => d.name), ...news.flatMap((n) => n.destinations)])].sort(), [news, destinations]);
   const continents = useMemo(() => [...new Set([...destinations.map((d) => d.continent), ...(news.map((n) => n.continent).filter(Boolean) as string[])])].sort(), [news, destinations]);
   const savedDestinations = useMemo(() => [...new Set(news.filter((n) => saved.has(n.id)).flatMap((n) => n.destinations))], [news, saved]);
-  const activeFilterCount = (["destination", "continent", "board", "relevance", "sourceType"] as const).filter((k) => filters[k]).length + (filters.savedOnly ? 1 : 0) + (filters.range !== "30" ? 1 : 0);
+  const activeFilterCount = (["destination", "continent", "board", "sourceType"] as const).filter((k) => filters[k]).length + (filters.relevance !== DEFAULT_FILTERS.relevance ? 1 : 0) + (filters.savedOnly ? 1 : 0) + (filters.range !== "30" ? 1 : 0);
+  const hiddenLow = filters.relevance === "MediumHigh" ? applyFilters(sorted, { ...filters, relevance: "" }, saved).filter((n) => n.india_relevance === "Low").length : 0;
 
   const set = <K extends keyof NewsFilters>(k: K, v: NewsFilters[K]) => setFilters((f) => ({ ...f, [k]: v }));
   const setLayoutPersist = (l: "grid" | "list") => {
@@ -155,6 +156,14 @@ export function HomeView(props: {
                     {filtered.length} {filtered.length === 1 ? "story" : "stories"}
                     <span className="ml-2 text-[14px] font-normal text-muted">{rangeLabel(filters)}</span>
                   </h2>
+                  {hiddenLow > 0 && (
+                    <p className="mt-1 text-[13px] text-muted">
+                      {hiddenLow} low India-relevance {hiddenLow === 1 ? "story" : "stories"} hidden.{" "}
+                      <button onClick={() => set("relevance", "")} className="font-medium text-accent hover:underline">
+                        Show all
+                      </button>
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -198,7 +207,7 @@ export function HomeView(props: {
                     <FilterSelect label="Destination / country" value={filters.destination} onChange={(v) => set("destination", v)} options={newsDestinations} />
                     <FilterSelect label="Continent" value={filters.continent} onChange={(v) => set("continent", v)} options={continents} />
                     <FilterSelect label="Tourism board" value={filters.board} onChange={(v) => set("board", v)} options={boards} />
-                    <FilterSelect label="India relevance" value={filters.relevance} onChange={(v) => set("relevance", v as NewsFilters["relevance"])} options={["High", "Medium", "Low"]} />
+                    <FilterSelect label="India relevance" value={filters.relevance} onChange={(v) => set("relevance", v as NewsFilters["relevance"])} options={["MediumHigh", "High", "Medium", "Low"]} labels={{ MediumHigh: "Medium and High (default)" }} allLabel="All, including Low" />
                     <FilterSelect label="Source type" value={filters.sourceType} onChange={(v) => set("sourceType", v)} options={Object.keys(SOURCE_TYPE_LABEL)} labels={SOURCE_TYPE_LABEL} />
                     <div>
                       <Label htmlFor="f-range">Published</Label>
@@ -289,13 +298,13 @@ function rangeLabel(f: NewsFilters) {
   return `in the last ${f.range} days`;
 }
 
-function FilterSelect({ label, value, onChange, options, labels }: { label: string; value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string> }) {
+function FilterSelect({ label, value, onChange, options, labels, allLabel = "All" }: { label: string; value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string>; allLabel?: string }) {
   const id = `f-${label.toLowerCase().replace(/\s+/g, "-")}`;
   return (
     <div>
       <Label htmlFor={id}>{label}</Label>
       <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">All</option>
+        <option value="">{allLabel}</option>
         {options.map((o) => (
           <option key={o} value={o}>
             {labels?.[o] ?? o}
