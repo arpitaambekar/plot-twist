@@ -1,6 +1,6 @@
-/* eslint-disable @next/next/no-img-element */
 import type { ImageRef } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { SmartImg } from "./smart-img";
 
 const PALETTES = [
   ["#EDF3FF", "#D9E4FB"],
@@ -34,11 +34,11 @@ export function Photo({
   attribution?: "hover" | "below" | "none";
   eager?: boolean;
 }) {
-  if (!image) {
+  const makePlaceholder = (cls?: string) => {
     const [a, b] = PALETTES[hash(label) % PALETTES.length];
     return (
       <div
-        className={cn("relative flex items-end overflow-hidden bg-ivory", className)}
+        className={cn("relative flex items-end overflow-hidden bg-ivory", cls)}
         style={{ background: `linear-gradient(135deg, ${a}, ${b})` }}
         role="img"
         aria-label={`${label} (no licensed photo available)`}
@@ -49,18 +49,12 @@ export function Photo({
         </span>
       </div>
     );
-  }
+  };
+  if (!image) return makePlaceholder(className);
   const credit = [image.author, image.license, image.provider].filter(Boolean).join(" · ");
   return (
     <figure className={cn("group relative overflow-hidden bg-ink/5", className)}>
-      <img
-        src={image.url}
-        alt={image.alt || label}
-        loading={eager ? "eager" : "lazy"}
-        decoding="async"
-        referrerPolicy="no-referrer"
-        className={cn("h-full w-full object-cover", imgClassName)}
-      />
+      <SmartImg src={image.url} alt={image.alt || label} eager={eager} className={imgClassName} fallback={makePlaceholder("h-full w-full")} />
       {attribution === "hover" && credit && (
         <figcaption className="pointer-events-none absolute bottom-0 right-0 max-w-full truncate rounded-tl-lg bg-ink/55 px-2 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
           {image.source_page ? (

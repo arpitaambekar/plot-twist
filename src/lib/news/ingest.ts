@@ -6,7 +6,8 @@ import { db, newId, nowIso } from "@/lib/db";
 import { env } from "@/lib/env";
 import { generateStructured } from "@/lib/ai/openai";
 import { webSearch, searchConfigured, normaliseDate } from "@/lib/search";
-import { findPhoto } from "@/lib/images";
+import { findPhoto, photoQueryFor } from "@/lib/images";
+import { extractPreviewImage, looksLikeThumbnail, pickFeedImage } from "./images";
 import { asUntrustedBlock, hostOf, safeUrl, sanitizeExternalText } from "@/lib/security/content";
 import { recordUsage } from "@/lib/security/rate-limit";
 import { getSettings, updateSettings } from "@/lib/settings";
@@ -60,7 +61,7 @@ const parser = new Parser({
   },
 });
 
-type FeedItem = Parser.Item & { mediaContent?: { $?: { url?: string; medium?: string } }[]; mediaThumbnail?: { $?: { url?: string } }; enclosure?: { url?: string; type?: string } };
+type FeedItem = Parser.Item & { mediaContent?: { $?: { url?: string; medium?: string; width?: string; type?: string } }[]; mediaThumbnail?: { $?: { url?: string; width?: string } }; enclosure?: { url?: string; type?: string } };
 
 async function readFeed(feed: FeedConfig): Promise<RawStory[]> {
   const res = await fetch(feed.url, { headers: { "User-Agent": UA, Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" }, signal: AbortSignal.timeout(20_000) });
@@ -72,7 +73,6 @@ async function readFeed(feed: FeedConfig): Promise<RawStory[]> {
     .map((it) => {
       const url = safeUrl(it.link);
       if (!url || !it.title) return null;
-      const img = it.mediaContent?.find((m) => m.$?.url && m.$.medium !== "video")?.$?.url ?? it.mediaThumbnail?.$?.url ?? (it.enclosure?.type?.startsWith("image") ? it.enclosure.url : undefined);
       const text = sanitizeExternalText(it.contentSnippet || it.content || it.summary || "", 1500);
       return {
         url,
@@ -82,7 +82,7 @@ async function readFeed(feed: FeedConfig): Promise<RawStory[]> {
         published_at: normaliseDate(it.isoDate ?? it.pubDate ?? null),
         publisher: feed.publisher,
         source_name: feed.name,
-        image_url: safeUrl(img ?? null),
+        image_url: pickFeedImage(it),
         via: "rss" as const,
         is_demo: false,
       };
@@ -357,9 +357,12 @@ export async function ingestNews(userId: string, onStage: (stage: "finding_sourc
     });
   }
 
-  // Destination photos (clearly labelled) for stories without their own image.
+  // Images: the article's own preview image first, then a clearly labelled destination photo.
+  await onStage("extracting_facts", "Finding story images");
+  await attachPreviewImages(fresh);
   await attachDestinationPhotos(fresh, directory);
   await store.insertMany("news_articles", fresh);
+  await backfillImages(directory);
 
   // 4. AI enrichment for the most relevant new stories, then refreshed signals.
   if (fresh.length && (env.openaiKey || env.demoFixtures)) {
@@ -383,18 +386,71 @@ export async function ingestNews(userId: string, onStage: (stage: "finding_sourc
   return { added: fresh.length, duplicates, feedsOk, feedsFailed, searchUsed, errors };
 }
 
+/** Stories whose image is missing, a stretched thumbnail, or only a stand-in destination photo. */
+function needsBetterImage(a: NewsArticle) {
+  return !a.image || a.image.is_destination_photo || looksLikeThumbnail(a.image.url);
+}
+
+async function fetchPreviewImage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html" }, signal: AbortSignal.timeout(7000), redirect: "follow" });
+    if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html") || !res.body) return null;
+    // Only the <head> matters: read at most ~300 KB.
+    const reader = res.body.getReader();
+    let html = "";
+    const dec = new TextDecoder();
+    while (html.length < 300_000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += dec.decode(value, { stream: true });
+      if (/<\/head>/i.test(html)) break;
+    }
+    reader.cancel().catch(() => {});
+    return extractPreviewImage(html, res.url || url);
+  } catch {
+    return null;
+  }
+}
+
+/** Use the publisher's own preview image (the one shown when the link is shared). */
+async function attachPreviewImages(articles: NewsArticle[], concurrency = 4) {
+  const todo = articles.filter((a) => !a.is_demo && needsBetterImage(a));
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (i < todo.length) {
+        const a = todo[i++];
+        const img = await fetchPreviewImage(a.url);
+        if (img) a.image = { url: img, alt: a.title, provider: a.publisher, author: null, license: "Publisher preview image", license_url: null, source_page: a.url };
+      }
+    }),
+  );
+}
+
+/** Improve images on recent stories stored before these rules existed (bounded per run). */
+async function backfillImages(directory: Destination[]) {
+  const store = db();
+  const recent = (await store.list("news_articles", { orderBy: { column: "retrieved_at" }, limit: 120 })).filter((a) => !a.is_demo && needsBetterImage(a)).slice(0, 30);
+  if (!recent.length) return;
+  const before = new Map(recent.map((a) => [a.id, JSON.stringify(a.image)]));
+  await attachPreviewImages(recent);
+  await attachDestinationPhotos(recent, directory);
+  for (const a of recent) if (JSON.stringify(a.image) !== before.get(a.id)) await store.update("news_articles", a.id, { image: a.image });
+}
+
 async function attachDestinationPhotos(articles: NewsArticle[], directory: Destination[]) {
   const cache = new Map<string, ImageRef | null>();
   for (const a of articles) {
     if (a.image) continue;
-    const d = directory.find((x) => x.name === a.destinations[0]);
-    if (!d) continue;
-    if (!cache.has(d.name)) {
-      const img = await Promise.race([findPhoto(d.photo_query, { file: d.photo_file, alt: d.name }), new Promise<null>((r) => setTimeout(() => r(null), 8000))]);
-      cache.set(d.name, img);
+    const name = a.destinations[0];
+    if (!name || /^india$/i.test(name)) continue;
+    const d = directory.find((x) => x.name.toLowerCase() === name.toLowerCase());
+    if (!cache.has(name)) {
+      const img = await Promise.race([findPhoto(photoQueryFor(name, d?.photo_query), { file: d?.photo_file, alt: name }), new Promise<null>((r) => setTimeout(() => r(null), 8000))]);
+      cache.set(name, img);
     }
-    const img = cache.get(d.name);
-    if (img) a.image = { ...img, alt: `Destination photo: ${d.name} (not from the article)`, is_destination_photo: true };
+    const img = cache.get(name);
+    if (img) a.image = { ...img, alt: `Destination photo: ${name} (not from the article)`, is_destination_photo: true };
   }
 }
 
