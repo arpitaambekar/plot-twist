@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, ArrowRight, MapPin, Clock } from "lucide-react";
@@ -62,19 +62,29 @@ export function ResearchHome({ directory, reports, prefill }: { directory: Direc
   const [traveller, setTraveller] = useState<(typeof TRAVELLERS)[number]>("All");
   const [period, setPeriod] = useState("Any season");
   const [depth, setDepth] = useState<"quick" | "comprehensive">("comprehensive");
-  const [kind, setKind] = useState<string>("city");
+  const [kind, setKind] = useState<string>("country");
   const [country, setCountry] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cached, setCached] = useState<Cached | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Suggestions match the start of a word, so one or two letters don't list unrelated places.
   const matches = useMemo(() => {
     const n = q.trim().toLowerCase();
-    if (!n) return [];
-    return directory.filter((d) => d.name.toLowerCase().includes(n) || (d.tourism_board ?? "").toLowerCase().includes(n)).slice(0, 6);
+    if (n.length < 2) return [];
+    const startsWord = (text: string) => text.toLowerCase().split(/[\s()/,-]+/).some((w) => w.startsWith(n)) || text.toLowerCase().startsWith(n);
+    return directory.filter((d) => startsWord(d.name) || startsWord(d.tourism_board ?? "")).slice(0, 6);
   }, [q, directory]);
   const inDirectory = directory.some((d) => d.name.toLowerCase() === q.trim().toLowerCase());
+  // Anything can be researched: offer the typed name first whenever it isn't an exact directory entry.
+  const freeOption = q.trim().length >= 2 && !inDirectory;
+  const optionCount = matches.length + (freeOption ? 1 : 0);
+  // Highlight the matching directory place when the text is the start of its name ("Sp" -> Spain);
+  // otherwise highlight "Research …" so Enter researches exactly what was typed.
+  useEffect(() => {
+    setActive(freeOption && matches.length ? 1 : 0);
+  }, [q, freeOption, matches.length]);
   const needsDisambiguation = q.trim().length >= 2 && !inDirectory;
 
   function pick(name: string) {
@@ -144,28 +154,52 @@ export function ResearchHome({ directory, reports, prefill }: { directory: Direc
               onFocus={() => setOpen(true)}
               onBlur={() => setTimeout(() => setOpen(false), 150)}
               onKeyDown={(e) => {
-                if (!open || !matches.length) return;
+                if (!open || !optionCount) return;
+                const offset = freeOption ? 1 : 0;
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
-                  setActive((a) => Math.min(a + 1, matches.length - 1));
+                  setActive((a) => Math.min(a + 1, optionCount - 1));
                 } else if (e.key === "ArrowUp") {
                   e.preventDefault();
                   setActive((a) => Math.max(a - 1, 0));
-                } else if (e.key === "Enter" && matches[active] && matches[active].name.toLowerCase() !== q.trim().toLowerCase()) {
-                  e.preventDefault();
-                  pick(matches[active].name);
+                } else if (e.key === "Enter") {
+                  // Enter on the typed name (or with no suggestion chosen) researches exactly what was typed.
+                  const m = matches[active - offset];
+                  if (active >= offset && m && m.name.toLowerCase() !== q.trim().toLowerCase()) {
+                    e.preventDefault();
+                    pick(m.name);
+                  } else setOpen(false);
                 } else if (e.key === "Escape") setOpen(false);
               }}
               placeholder="Where should we explore next?"
               className="h-16 w-full rounded-2xl border border-line bg-ivory/50 pl-14 pr-4 text-[19px] text-ink placeholder:text-muted/70 focus:border-accent focus:bg-surface focus:outline-none focus:ring-4 focus:ring-soft-blue md:text-[21px]"
               role="combobox"
-              aria-expanded={open && matches.length > 0}
+              aria-expanded={open && optionCount > 0}
               aria-controls="dest-suggestions"
               aria-autocomplete="list"
             />
-            {open && matches.length > 0 && (
+            {open && optionCount > 0 && (
               <ul id="dest-suggestions" role="listbox" className="absolute left-0 right-0 top-[70px] z-30 rounded-2xl border border-line bg-surface p-1.5 shadow-[var(--shadow-lift)]">
-                {matches.map((m, i) => (
+                {freeOption && (
+                  <li role="option" aria-selected={active === 0}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setOpen(false);
+                        void submit(false);
+                      }}
+                      onMouseEnter={() => setActive(0)}
+                      className={cn("flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left", active === 0 ? "bg-soft-blue" : "hover:bg-ink/[0.03]")}
+                    >
+                      <span className="text-[15px] font-medium text-ink">Research “{q.trim()}”</span>
+                      <span className="text-[12px] text-muted">Any country, city, region or island</span>
+                    </button>
+                  </li>
+                )}
+                {matches.map((m, j) => {
+                  const i = j + (freeOption ? 1 : 0);
+                  return (
                   <li key={m.id} role="option" aria-selected={i === active}>
                     <button
                       type="button"
@@ -180,10 +214,12 @@ export function ResearchHome({ directory, reports, prefill }: { directory: Direc
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>
+          <p className="mt-2 px-1 text-[12px] text-muted">Type any country, city, region or island. Suggestions come from the destination directory.</p>
 
           {needsDisambiguation && (
             <div className="mt-4 rounded-xl border border-line bg-ivory/60 p-4">
