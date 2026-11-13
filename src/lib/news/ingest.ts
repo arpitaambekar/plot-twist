@@ -1,4 +1,5 @@
 import "server-only";
+import { describeError } from "@/lib/errors";
 import Parser from "rss-parser";
 import { z } from "zod";
 import { db, newId, nowIso } from "@/lib/db";
@@ -253,7 +254,7 @@ export async function ingestNews(userId: string, onStage: (stage: "finding_sourc
         await store.update("feeds", f.id, { last_status: "ok", last_checked_at: nowIso(), last_error: null, item_count: items.length });
       } catch (e) {
         feedsFailed++;
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = describeError(e);
         errors.push(`${f.name}: ${msg}`);
         await store.update("feeds", f.id, { last_status: "failed", last_checked_at: nowIso(), last_error: msg.slice(0, 300) });
       }
@@ -266,13 +267,14 @@ export async function ingestNews(userId: string, onStage: (stage: "finding_sourc
     searchUsed = true;
     raw.push(...demoStories());
   } else if (searchConfigured()) {
-    searchUsed = true;
+    // Only counts as used once a search actually succeeds (all-failing searches are a retrieval failure).
     const watched = [...new Set((await store.list("watchlist", { where: { kind: "destination" } as never })).map((w) => w.value))];
     const queries = searchQueries(new Date().getFullYear(), watched);
     await onStage("finding_sources", `Searching ${queries.length} news queries`);
     for (const q of queries) {
       try {
         const results = await webSearch(q, { topic: "news", days: settings.news_lookback_days, maxResults: 6, userId });
+        searchUsed = true;
         raw.push(
           ...results.map((r) => ({
             url: r.url,
@@ -288,7 +290,7 @@ export async function ingestNews(userId: string, onStage: (stage: "finding_sourc
           })),
         );
       } catch (e) {
-        errors.push(`Search "${q}": ${e instanceof Error ? e.message : String(e)}`);
+        errors.push(`Search "${q}": ${describeError(e)}`);
       }
     }
   }
@@ -353,14 +355,14 @@ export async function ingestNews(userId: string, onStage: (stage: "finding_sourc
     try {
       await enrich(priority, userId);
     } catch (e) {
-      errors.push(`AI enrichment: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`AI enrichment: ${describeError(e)}`);
     }
   }
   if (env.openaiKey || env.demoFixtures) {
     try {
       await generateSignals(userId);
     } catch (e) {
-      errors.push(`Opportunity signals: ${e instanceof Error ? e.message : String(e)}`);
+      errors.push(`Opportunity signals: ${describeError(e)}`);
     }
   }
 
@@ -387,12 +389,12 @@ async function attachDestinationPhotos(articles: NewsArticle[], directory: Desti
 export async function runNewsJob(job: ResearchJob): Promise<void> {
   const result = await ingestNews(job.created_by, (stage, msg) => setJobStage(job.id, stage, msg));
   await updateSettings({ last_news_refresh_at: nowIso() });
-  const summary = `Added ${result.added} new stor${result.added === 1 ? "y" : "ies"}, skipped ${result.duplicates} duplicate(s). Feeds OK: ${result.feedsOk}, failed: ${result.feedsFailed}.${result.searchUsed ? "" : " Live search not configured."}`;
+  const summary = `Added ${result.added} new stor${result.added === 1 ? "y" : "ies"}, skipped ${result.duplicates} duplicate(s). Feeds OK: ${result.feedsOk}, failed: ${result.feedsFailed}.${result.searchUsed ? "" : searchConfigured() ? " News search could not be reached." : " Live search not configured."}`;
   // Retrieval that worked but found nothing new is a success, not a failure.
   const nothingWorked = result.feedsOk === 0 && !result.searchUsed;
   if (nothingWorked) {
     await setJobStage(job.id, "failed", `Live retrieval failed. Showing cached stories. ${result.errors.slice(0, 3).join("; ")}`, {
-      error: "Live retrieval failed: no feed could be read and live search is not configured. Cached stories are still shown.",
+      error: `Live retrieval failed: no feed or news search could be reached. ${result.errors[0] ?? ""} Cached stories are still shown.`,
     });
     return;
   }

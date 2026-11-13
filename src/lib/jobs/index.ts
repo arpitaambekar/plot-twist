@@ -1,4 +1,5 @@
 import "server-only";
+import { describeError } from "@/lib/errors";
 import { after } from "next/server";
 import { db, newId, nowIso } from "@/lib/db";
 import type { JobStatus, ResearchJob } from "@/lib/types";
@@ -66,7 +67,7 @@ export async function executeJob(jobId: string) {
     try {
       await handler({ ...job, attempts: job.attempts + 1 });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = describeError(e);
       await setJobStage(jobId, "failed", `Failed: ${msg}`, { error: msg });
     }
   } finally {

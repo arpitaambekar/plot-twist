@@ -1,4 +1,5 @@
 import "server-only";
+import { describeError } from "@/lib/errors";
 import type { ZodType } from "zod";
 import { db, nowIso, newId } from "@/lib/db";
 import type { Claim, Destination, ImageRef, PlaceItem, Report, ReportContent, ReportOptions, ResearchJob, SourceRecord, SourcedText } from "@/lib/types";
@@ -124,7 +125,7 @@ async function research(job: ResearchJob, input: ResearchJobInput, report: Repor
       byGroup.set(q.group, [...(byGroup.get(q.group) ?? []), ...results]);
     } catch (e) {
       if (e instanceof NotConfiguredError) throw e;
-      notes.push(`Search failed for "${q.query}": ${(e as Error).message}`);
+      notes.push(`Search failed for "${q.query}": ${describeError(e)}`);
     }
   });
   const groups = new Map<GroupKey, Labelled>();
@@ -174,7 +175,7 @@ async function research(job: ResearchJob, input: ResearchJobInput, report: Repor
       extractedLog.push(`Extracted: ${GROUP_LABEL[t.group]}`);
     } catch (e) {
       if (e instanceof NotConfiguredError) throw e;
-      notes.push(`${GROUP_LABEL[t.group]}: extraction failed (${(e as Error).message}).`);
+      notes.push(`${GROUP_LABEL[t.group]}: extraction failed (${describeError(e)}).`);
     }
   });
   // Stage log written sequentially (parallel writes to the same job row could drop entries).
@@ -310,7 +311,7 @@ async function research(job: ResearchJob, input: ResearchJobInput, report: Repor
     });
   } catch (e) {
     if (e instanceof NotConfiguredError) throw e;
-    notes.push(`Strategic synthesis failed (${(e as Error).message}).`);
+    notes.push(`Strategic synthesis failed (${describeError(e)}).`);
   }
 
   // Photography: hero, places, gallery (licensed only, never an unrelated image).

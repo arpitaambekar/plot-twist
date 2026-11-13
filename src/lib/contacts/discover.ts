@@ -1,4 +1,5 @@
 import "server-only";
+import { describeError } from "@/lib/errors";
 import { z } from "zod";
 import { db, newId, nowIso } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -207,7 +208,7 @@ export async function runContactJob(job: ResearchJob): Promise<void> {
     if (!saved.length) notes.push("Not Found: no reliable, verifiable contact was identified.");
     await finish(job, input.search_id, target, saved, notes);
   } catch (e) {
-    await store.update("contact_searches", input.search_id, { status: "failed", error: e instanceof Error ? e.message : String(e), notes });
+    await store.update("contact_searches", input.search_id, { status: "failed", error: describeError(e), notes });
     throw e;
   }
 }
