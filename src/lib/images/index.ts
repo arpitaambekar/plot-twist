@@ -91,7 +91,8 @@ async function unsplash(query: string, alt: string): Promise<ImageRef | null> {
 
 /** Find a licensed photo. `file` is a known Commons filename to try first. */
 export function findPhoto(query: string, opts: { alt?: string; file?: string | null } = {}): Promise<ImageRef | null> {
-  if (env.demoFixtures) return Promise.resolve(null);
+  // Real destination photos are fine in demo mode; never search photos for fictional [DEMO] items.
+  if (/\[demo\]|demo fixture|placeholder/i.test(query)) return Promise.resolve(null);
   const key = `${opts.file ?? ""}|${query}`;
   if (!memo.has(key)) {
     const alt = opts.alt ?? query;
